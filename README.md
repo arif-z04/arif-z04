@@ -16,7 +16,7 @@ Welcome to my GitHub profile! I'm a passionate learner and developer interested 
 
 ![Arif's GitHub Stats](https://github-readme-stats.vercel.app/api?username=arif-z04&show_icons=true&theme=radical)
 ![Top Languages](https://github-readme-stats.vercel.app/api/top-langs/?username=arif-z04&layout=compact&theme=radical)
-![GitHub Streak](https://streak-stats.demolab.com/?user=arif-z04&theme=radical)
+
 
 ---
 
