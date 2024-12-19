@@ -1,4 +1,4 @@
-# Hi there! 👋 I'm Arif Uz Zaman
+# Hi there! 👋 I'm Arif
 
 Welcome to my GitHub profile! I'm a passionate learner and developer interested in exploring and creating cool projects in Computer Science and Engineering.
 
