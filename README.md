@@ -1,5 +1,5 @@
 # 💫About Me :
-<h1 align="center">Hi 👋, I'm Arif</h1>
+<h1 align="center">👋 Hi, I'm Arif</h1>
 <h3 align="center"> CSE Student | Competitive Programmer | Aspiring Engineer </h3>
 
 - 🔭 I’m currently learning on **C, Python**
