@@ -1,50 +1,34 @@
-# Hi there! 👋 I'm Arif
+# 💫About Me :
+<h1 align="center">Hi 👋, I'm Arif</h1>
+<h3 align="center"> CSE Student | Competitive Programmer | Aspiring Engineer </h3>
 
-Welcome to my GitHub profile! I'm a passionate learner and developer interested in exploring and creating cool projects in Computer Science and Engineering.
+- 🔭 I’m currently learning on **C, Python**
 
----
+- 🌱 I’m interested in **Dev-ops**
 
-![Profile Views](https://komarev.com/ghpvc/?username=arif-z04&color=blue)
+- 📫 How to reach me **sm.arifuzzaman04@gmail.com**
 
-<div align="center">
-  <img src="https://media.giphy.com/media/M9gbBd9nbDrOTu1Mqx/giphy.gif" width="200"/>
-</div>
+## 🌐Connect with me:
 
----
+<p align="left">
+<a href="https://linkedin.com/in/smarifuzzaman04" target="blank"><img align="center" src="https://raw.githubusercontent.com/rahuldkjain/github-profile-readme-generator/master/src/images/icons/Social/linked-in-alt.svg" alt="S M Arifuzzaman" height="30" width="40" /></a>
+<a href="https://fb.com/arif.uz.zaman2003" target="blank"><img align="center" src="https://raw.githubusercontent.com/rahuldkjain/github-profile-readme-generator/master/src/images/icons/Social/facebook.svg" alt="Arif Uzzaman" height="30" width="40" /></a>
+<a href="https://codeforces.com/profile/Byakk0" target="blank"><img align="center" src="https://raw.githubusercontent.com/rahuldkjain/github-profile-readme-generator/master/src/images/icons/Social/codeforces.svg" alt="Byakk0" height="30" width="40" /></a>
+</p>
 
-## 📊 GitHub Stats
+# 💻Tech Stack
+![C](https://img.shields.io/badge/c-%2300599C.svg?style=plastic&logo=c&logoColor=white)![Python](https://img.shields.io/badge/python-3670A0?style=plastic&logo=python&logoColor=ffdd54)![C++](https://img.shields.io/badge/c++-%2300599C.svg?style=plastic&logo=c%2B%2B&logoColor=white)
 
-![Arif's GitHub Stats](https://github-readme-stats.vercel.app/api?username=arif-z04&show_icons=true&theme=radical)
-![Top Languages](https://github-readme-stats.vercel.app/api/top-langs/?username=arif-z04&layout=compact&theme=radical)
+# 📊GitHub Stats :
+![](https://github-readme-stats.vercel.app/api?username=arif-z04&theme=nightowl&hide_border=false&include_all_commits=false&count_private=false)<br/>
+![](https://github-readme-streak-stats.herokuapp.com/?user=arif-z04&theme=nightowl&hide_border=false)<br/>
+![](https://github-readme-stats.vercel.app/api/top-langs/?username=arif-z04&theme=nightowl&hide_border=false&include_all_commits=false&count_private=false&layout=compact)
 
 
----
+[![](https://github-readme-activity-graph.vercel.app/graph?username=arif-z04&theme=merko)]
 
-## 🛠️ Languages and Tools:
-
-![C](https://img.shields.io/badge/-C-00599C?style=flat&logo=c)
-![C++](https://img.shields.io/badge/-C++-00599C?style=flat&logo=cplusplus)
-![Python](https://img.shields.io/badge/-Python-3776AB?style=flat&logo=python)
-![Git](https://img.shields.io/badge/-Git-F05032?style=flat&logo=git)
-![GitHub](https://img.shields.io/badge/-GitHub-181717?style=flat&logo=github)
-![VS Code](https://img.shields.io/badge/-VS%20Code-007ACC?style=flat&logo=visual-studio-code)
-
----
-
-## 🌐 Connect with Me:
-
-[![LinkedIn](https://img.shields.io/badge/LinkedIn-blue?style=flat&logo=linkedin)](https://www.linkedin.com/in/smarifuzzaman04/)
-[![Facebook](https://img.shields.io/badge/Facebook-1877F2?style=flat&logo=facebook&logoColor=white)](https://www.facebook.com/arif.uz.zaman2003)
+## 🏆GitHub Trophies
+![](https://github-trophies.vercel.app/?username=arif-z04&theme=matrix&no-frame=true&no-bg=true&margin-w=4)
 
 ---
-
-### 🚀 About Me:
-
-- 🎓 CSE Student at Patuakhali University of Science and Technology (PSTU)
-- 🌱 Currently exploring **dynamic memory allocation in C**
-- 💡 Keen on **innovation** and **research**
-- 🤝 Open to collaborating on **interesting projects**
-
----
-
-⭐️ Thanks for visiting my profile! Feel free to explore my repositories and connect with me. Let’s create something amazing together! 🚀
+[![](https://visitcount.itsvg.in/api?id=MdLeon-official&icon=2&color=11)](https://visitcount.itsvg.in)
