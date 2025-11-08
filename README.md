@@ -4,7 +4,7 @@
 
 - 🔭 I’m currently learning on **C, Python**
 
-- 🌱 I’m interested in **Dev-ops**
+- 🌱 I’m interested in **Full-stack || Machine Leanrning**
 
 - 📫 How to reach me **sm.arifuzzaman04@gmail.com**
 
