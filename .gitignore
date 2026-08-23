@@ -1,0 +1,14 @@
+# Environment variables (contains secret tokens)
+.env
+
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.venv/
+venv/
+env/
+
+# OS metadata
+.DS_Store
