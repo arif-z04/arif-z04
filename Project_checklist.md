@@ -10,9 +10,10 @@ Project Checklist before adding API KEY
 
 
 Project Checklist after adding API KEY
-- [] Check if the bot is able to fetch the data from GitHub API and update the SVGs
-- [] Test on ASCII generator
-- [] Check the bot, if it will run on the background after booting up or restarting the device
-- [] updating github repo push with time-stamp messages
-- [] Light and Dark themed SVGs generated
-- [] Check for Vulnerabilities 
+- [x] Check if the bot is able to fetch the data from GitHub API and update the SVGs
+- [x] Test on ASCII generator
+- [x] Check the bot, if it will run on the background after booting up or restarting the device
+- [x] updating github repo push with time-stamp messages
+- [x] Light and Dark themed SVGs generated
+- [x] Check for Token Expiration, if expired notify the user to generate a new token
+- [x] Check for Vulnerabilities 
