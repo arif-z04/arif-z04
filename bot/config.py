@@ -37,6 +37,14 @@ class Config:
     # Remote git branch
     GIT_BRANCH: str = os.getenv("GIT_BRANCH", "main").strip()
 
+    # User Personal Metrics & Custom Information
+    BIRTHDAY: str = os.getenv("BIRTHDAY", "2004-05-04").strip()  # May 4, 2004
+    OS_INFO: str = os.getenv("OS_INFO", "Linux, Android 16").strip()
+    HOBBY_MAIN: str = os.getenv("HOBBY_MAIN", "Sing").strip()
+    HOBBY_SOFTWARE: str = os.getenv("HOBBY_SOFTWARE", "Making bots").strip()
+    HOBBY_HARDWARE: str = os.getenv("HOBBY_HARDWARE", "Networking modules, Raspberry PI").strip()
+    DISCORD_HANDLE: str = os.getenv("DISCORD_HANDLE", "arif.noir").strip()
+
     # SVG Output File Paths
     LIGHT_SVG_PATH: Path = REPO_DIR / "light_mode.svg"
     DARK_SVG_PATH: Path = REPO_DIR / "dark_mode.svg"
@@ -57,6 +65,9 @@ class Config:
         print("=" * 60)
         print(f" Target Username     : {cls.GITHUB_USERNAME}")
         print(f" Repository Directory: {cls.REPO_DIR}")
+        print(f" Birthday (Age Calc) : {cls.BIRTHDAY}")
+        print(f" OS / System         : {cls.OS_INFO}")
+        print(f" Discord Handle      : {cls.DISCORD_HANDLE}")
         print(f" Light SVG Path      : {cls.LIGHT_SVG_PATH.name}")
         print(f" Dark SVG Path       : {cls.DARK_SVG_PATH.name}")
         print(f" Update Interval     : {cls.UPDATE_INTERVAL_HOURS} hour(s)")

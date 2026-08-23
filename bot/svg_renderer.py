@@ -1,15 +1,16 @@
 """
 bot.svg_renderer
 ~~~~~~~~~~~~~~~~
-SVG card layout renderer. Converts GitHub stats and ASCII art lines into
-clean, pixel-aligned SVG vector cards for both light and dark GitHub themes.
+SVG card layout renderer. Converts GitHub stats, custom user profile metrics,
+hobbies, contact links, lines of code, and ASCII art lines into clean, pixel-aligned
+SVG vector cards for both light and dark GitHub themes.
 """
 
 from dataclasses import dataclass
 import html
 import logging
 
-from bot.github_api import GitHubStats, account_uptime
+from bot.github_api import GitHubStats
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +25,7 @@ ASCII_LINE_HEIGHT = 9.6
 
 PAD = 28
 GAP = 32
-INFO_COLS = 58
+INFO_COLS = 62
 
 
 @dataclass
@@ -38,6 +39,8 @@ class ThemePalette:
     dots: str
     value: str
     number: str
+    green_add: str
+    red_del: str
 
 
 PALETTES: dict[str, ThemePalette] = {
@@ -51,6 +54,8 @@ PALETTES: dict[str, ThemePalette] = {
         dots="#8c959f",
         value="#24292f",
         number="#0550ae",
+        green_add="#1a7f37",
+        red_del="#cf222e",
     ),
     "dark": ThemePalette(
         bg="#0d1117",
@@ -62,6 +67,8 @@ PALETTES: dict[str, ThemePalette] = {
         dots="#484f58",
         value="#c9d1d9",
         number="#79c0ff",
+        green_add="#3fb950",
+        red_del="#f85149",
     ),
 }
 
@@ -132,9 +139,14 @@ def build_info_lines(stats: GitHubStats, palette: ThemePalette) -> list[Line]:
     def add_blank() -> None:
         lines.append([])
 
-    # Header Section
+    # Format numbers
+    n = lambda num: f"{num:,}"
+
+    # Section 1: User Profile Header & System Info
     add_header(f"{stats.login}@github")
-    add_kv("Uptime", account_uptime(stats.created_at))
+    add_kv("Uptime", stats.birthday_age)
+    add_kv("OS", stats.os_info)
+    add_kv("IDE", f"VSCode {stats.vscode_version}")
     if stats.location:
         add_kv("Location", stats.location)
     if stats.company:
@@ -142,27 +154,51 @@ def build_info_lines(stats: GitHubStats, palette: ThemePalette) -> list[Line]:
     if stats.languages:
         add_kv("Languages", ", ".join(stats.languages))
 
-    # Contact Section
+    # Section 2: Hobbies
+    add_blank()
+    add_header("Hobbies")
+    add_kv("Main", stats.hobbies_main)
+    add_kv("Software", stats.hobbies_software)
+    add_kv("Hardware", stats.hobbies_hardware)
+
+    # Section 3: Contact Section (LinkedIn, Discord, GitHub, etc.)
     add_blank()
     add_header("Contact")
+    if stats.linkedin:
+        add_kv("LinkedIn", stats.linkedin)
+    if stats.discord:
+        add_kv("Discord", stats.discord)
+    if stats.facebook:
+        add_kv("Facebook", stats.facebook)
     if stats.email:
         add_kv("Email", stats.email)
     if stats.blog:
         add_kv("Website", stats.blog)
-    if stats.twitter:
-        add_kv("Twitter", f"@{stats.twitter}")
     add_kv("GitHub", f"github.com/{stats.login}")
 
-    # GitHub Stats Section
+    # Section 4: GitHub Stats & Lines of Code
     add_blank()
     add_header("GitHub Stats")
-    n = lambda num: f"{num:,}"
-    add_kv2("Repos", n(stats.public_repos), "Stars", n(stats.stars))
+    add_kv2("Repos", n(stats.public_repos), "Contributions", n(stats.contributions))
+    add_kv2("Stars", n(stats.stars), "Commits", n(stats.commits))
 
-    if stats.commits is not None:
-        add_kv2("Commits", n(stats.commits), "Followers", n(stats.followers))
-    else:
-        add_kv("Followers", n(stats.followers), palette.number)
+    # Lines of Code with Green Additions & Red Deletions
+    net_str = n(stats.net_loc)
+    add_str = f"+{n(stats.additions)}"
+    del_str = f"-{n(stats.deletions)}"
+
+    prefix = ". Lines of Code: "
+    dot_count = max(2, INFO_COLS - len("Lines of Code") - len(net_str) - len(add_str) - len(del_str) - 13)
+
+    lines.append([
+        TextSpan(prefix, palette.key),
+        TextSpan("." * dot_count, palette.dots),
+        TextSpan(f" {net_str} ( ", palette.value),
+        TextSpan(add_str, palette.green_add),
+        TextSpan(", ", palette.value),
+        TextSpan(del_str, palette.red_del),
+        TextSpan(" )", palette.value),
+    ])
 
     return lines
 
@@ -176,7 +212,7 @@ def render_svg_card(
     Renders complete SVG document for the given profile stats and ASCII art lines.
 
     Parameters:
-    - stats: GitHubStats object containing fetched metrics.
+    - stats: GitHubStats object containing fetched & custom metrics.
     - ascii_lines: Array of generated ASCII text strings.
     - theme: 'light' or 'dark'.
     """

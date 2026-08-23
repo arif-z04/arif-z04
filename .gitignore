@@ -9,6 +9,7 @@ __pycache__/
 .venv/
 venv/
 env/
+docs/
 
 # OS metadata
 .DS_Store
