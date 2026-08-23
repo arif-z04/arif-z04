@@ -33,19 +33,20 @@ Fine-grained tokens provide precise permission control scoped to specific reposi
    - Select your profile repository (`arif-z04`).
 6. **Set Permissions**:
    - Expand **Repository permissions**:
-     - `Contents`: Set to **Read-only**
-     - `Metadata`: Set to **Read-only** (mandatory)
-   - Expand **Account permissions**:
-     - `User permissions`: Set to **Read-only**
+     - **Contents**: Set to **Read-only**
+     - **Metadata**: Set to **Read-only** (Mandatory, auto-selected by GitHub)
+   - Expand **Account permissions** (Optional):
+     - **Email addresses**: Set to **Read-only**
+     - **Profile**: Set to **Read-only**
 7. **Generate and Copy**:
    - Click **Generate token** at the bottom.
    - ⚠️ **Important**: Copy your token string immediately (`github_pat_xxxxxxxxxxxx...`). It will only be shown once.
 
 ---
 
-### Method 2: Personal Access Token (Classic)
+### Method 2: Personal Access Token (Classic) - *Easiest & Quickest*
 
-Classic tokens are quick to set up and work across all public repositories.
+Classic tokens use simple checkboxes and are the easiest way to generate a token.
 
 1. Navigate to **GitHub Settings** -> **Developer settings** -> **Personal access tokens** -> **Tokens (classic)**.
 2. Click **Generate new token** -> Select **Generate new token (classic)**.
