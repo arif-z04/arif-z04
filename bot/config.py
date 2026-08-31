@@ -7,14 +7,28 @@ variables from `.env` and provides validated settings across all modules.
 
 import os
 from pathlib import Path
-from dotenv import load_dotenv
 
 # Base directory of the repository (parent of the 'bot' folder)
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Load environment variables from .env file in project root if present
 ENV_PATH = BASE_DIR / ".env"
-load_dotenv(dotenv_path=ENV_PATH)
+try:
+    from dotenv import load_dotenv
+    load_dotenv(dotenv_path=ENV_PATH)
+except ImportError:
+    # Fallback parser if python-dotenv is not installed
+    if ENV_PATH.exists():
+        with open(ENV_PATH, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                k, v = line.split("=", 1)
+                k, v = k.strip(), v.strip()
+                if (v.startswith('"') and v.endswith('"')) or (v.startswith("'") and v.endswith("'")):
+                    v = v[1:-1]
+                os.environ.setdefault(k, v)
 
 
 class Config:
@@ -31,8 +45,16 @@ class Config:
         os.getenv("GITHUB_TOKEN").strip() if os.getenv("GITHUB_TOKEN") else None
     )
 
-    # Update frequency in hours (default: 1 hour = 3600 seconds)
-    UPDATE_INTERVAL_HOURS: float = float(os.getenv("UPDATE_INTERVAL_HOURS", "1"))
+    # Polling / Status Check interval in seconds (default: 120 seconds = 2 minutes)
+    CHECK_INTERVAL_SECONDS: float = float(
+        os.getenv(
+            "CHECK_INTERVAL_SECONDS",
+            os.getenv("POLL_INTERVAL_SECONDS", "120")
+        )
+    )
+
+    # State file path for tracking last known GitHub record
+    STATE_FILE_PATH: Path = REPO_DIR / ".bot_state.json"
 
     # Remote git branch
     GIT_BRANCH: str = os.getenv("GIT_BRANCH", "main").strip()
@@ -53,9 +75,9 @@ class Config:
     USER_AGENT: str = f"GitHub-Profile-SVG-Bot/{GITHUB_USERNAME}"
 
     @classmethod
-    def update_interval_seconds(cls) -> float:
-        """Returns the update interval in seconds."""
-        return max(60.0, cls.UPDATE_INTERVAL_HOURS * 3600.0)
+    def check_interval(cls) -> float:
+        """Returns the status check interval in seconds (minimum 10s)."""
+        return max(10.0, cls.CHECK_INTERVAL_SECONDS)
 
     @classmethod
     def print_summary(cls) -> None:
@@ -70,7 +92,8 @@ class Config:
         print(f" Discord Handle      : {cls.DISCORD_HANDLE}")
         print(f" Light SVG Path      : {cls.LIGHT_SVG_PATH.name}")
         print(f" Dark SVG Path       : {cls.DARK_SVG_PATH.name}")
-        print(f" Update Interval     : {cls.UPDATE_INTERVAL_HOURS} hour(s)")
+        print(f" Check Interval      : {cls.check_interval()} seconds")
+        print(f" State File          : {cls.STATE_FILE_PATH.name}")
         print(f" Git Branch          : {cls.GIT_BRANCH}")
         print(f" API Token Configured: {'YES' if cls.GITHUB_TOKEN else 'NO (Unauthenticated Mode)'}")
         print("=" * 60)

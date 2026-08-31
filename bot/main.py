@@ -14,7 +14,12 @@ import time
 from bot.ascii_generator import fetch_avatar_image, generate_ascii_art
 from bot.config import Config
 from bot.git_manager import commit_and_push_svgs
-from bot.github_api import fetch_stats
+from bot.github_api import (
+    check_github_status_updated,
+    fetch_stats,
+    load_bot_state,
+    save_bot_state,
+)
 from bot.service import (
     install_service,
     restart_service,
@@ -36,7 +41,7 @@ def setup_logging() -> None:
     )
 
 
-def run_update_cycle() -> bool:
+def run_update_cycle(state: dict | None = None) -> bool:
     """
     Executes a complete update cycle:
     1. Fetches metrics from GitHub API.
@@ -45,6 +50,7 @@ def run_update_cycle() -> bool:
     4. Renders light_mode.svg and dark_mode.svg.
     5. Saves SVGs to repository root.
     6. Commits and pushes changes via Git/SSH.
+    7. Persists the latest state snapshot to disk.
     """
     logger = logging.getLogger("bot.main")
     logger.info("Starting profile SVG update cycle...")
@@ -80,6 +86,14 @@ def run_update_cycle() -> bool:
         # 6. Commit and Push via Git
         commit_and_push_svgs()
 
+        # 7. Persist updated state snapshot
+        if state is not None:
+            save_bot_state(state)
+        else:
+            # Generate snapshot from current check
+            _, _, current_state = check_github_status_updated(prev_state=None)
+            save_bot_state(current_state)
+
         logger.info("Update cycle completed successfully!")
         return True
 
@@ -89,22 +103,47 @@ def run_update_cycle() -> bool:
 
 
 def run_daemon_loop() -> None:
-    """Runs the bot continuously in a background loop at configured interval."""
+    """
+    Runs the bot continuously in a background daemon loop.
+    Periodically checks if GitHub status or local configuration has updated.
+    Triggers full SVG generation and Git push only when changes are detected.
+    """
     logger = logging.getLogger("bot.main")
     Config.print_summary()
 
-    interval_sec = Config.update_interval_seconds()
-    logger.info("Starting background daemon loop (Interval: %s seconds)...", interval_sec)
+    check_interval = Config.check_interval()
+    logger.info("Starting background state monitoring daemon (Poll Interval: %s seconds)...", check_interval)
+
+    # 1. Check if previous state exists or SVGs need initial generation
+    prev_state = load_bot_state()
+    if prev_state is None or not Config.LIGHT_SVG_PATH.exists() or not Config.DARK_SVG_PATH.exists():
+        logger.info("No previous state record or SVGs found on disk. Performing initial baseline sync...")
+        run_update_cycle()
+        prev_state = load_bot_state()
+
+    logger.info("Bot is active and monitoring for GitHub status updates...")
 
     try:
         while True:
-            start_time = time.time()
-            run_update_cycle()
-            elapsed = time.time() - start_time
-            sleep_time = max(10.0, interval_sec - elapsed)
+            try:
+                has_changed, reasons, current_state = check_github_status_updated(prev_state=prev_state)
 
-            logger.info("Sleeping for %.1f seconds until next update...", sleep_time)
-            time.sleep(sleep_time)
+                if has_changed:
+                    logger.info("GitHub status change detected!")
+                    for reason in reasons:
+                        logger.info("  * %s", reason)
+
+                    success = run_update_cycle(state=current_state)
+                    if success:
+                        prev_state = current_state
+                        save_bot_state(current_state)
+                else:
+                    logger.info("Status check: No changes detected. Standing by...")
+
+            except Exception as loop_err:
+                logger.error("Error during status monitoring check: %s", loop_err, exc_info=True)
+
+            time.sleep(check_interval)
 
     except KeyboardInterrupt:
         logger.info("Daemon loop stopped by user (KeyboardInterrupt). Exiting clean.")
@@ -126,7 +165,7 @@ def main() -> None:
     parser.add_argument(
         "--daemon",
         action="store_true",
-        help="Run continuously in background daemon loop every hour.",
+        help="Run continuously in background daemon loop, monitoring for GitHub status updates.",
     )
     parser.add_argument(
         "--install-service",

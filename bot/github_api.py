@@ -6,8 +6,10 @@ social accounts, top programming languages, commit search metrics, lines of code
 VSCode version, age calculation, and contributions with optional OAuth authorization.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
+import hashlib
+import json
 import logging
 import time
 import requests
@@ -337,3 +339,171 @@ def fetch_stats(username: str | None = None, token: str | None = None) -> GitHub
 
     logger.info("Successfully retrieved full profile stats for '%s'", stats.login)
     return stats
+
+
+def get_config_hash() -> str:
+    """Computes a hash of custom config attributes to detect local profile info changes."""
+    payload = f"{Config.BIRTHDAY}:{Config.OS_INFO}:{Config.HOBBY_MAIN}:{Config.HOBBY_SOFTWARE}:{Config.HOBBY_HARDWARE}:{Config.DISCORD_HANDLE}:{Config.GIT_BRANCH}"
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+
+
+def load_bot_state() -> dict | None:
+    """Loads the last recorded bot state from disk if available."""
+    state_file = Config.STATE_FILE_PATH
+    if not state_file.exists():
+        return None
+    try:
+        with open(state_file, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as e:
+        logger.warning("Failed to read bot state file %s: %s", state_file, e)
+        return None
+
+
+def save_bot_state(state: dict) -> None:
+    """Saves the current bot state record to disk."""
+    state_file = Config.STATE_FILE_PATH
+    try:
+        with open(state_file, "w", encoding="utf-8") as f:
+            json.dump(state, f, indent=2)
+        logger.debug("Saved bot state to %s", state_file)
+    except Exception as e:
+        logger.warning("Failed to save bot state to %s: %s", state_file, e)
+
+
+def check_github_status_updated(
+    username: str | None = None,
+    token: str | None = None,
+    prev_state: dict | None = None
+) -> tuple[bool, list[str], dict]:
+    """
+    Lightweight check to determine whether GitHub status or local configuration
+    has updated compared to the previous record.
+
+    Performs fast, low-overhead queries:
+    1. User base profile (updated_at, repos, followers, name, avatar, etc.)
+    2. Latest public event (latest commit push or activity)
+    3. Latest pushed repository timestamp
+    4. Calculated age / uptime string
+    5. Local config hash
+
+    Returns:
+    - has_changed: True if changes detected, False otherwise.
+    - reasons: List of human-readable explanations of detected changes.
+    - current_state: Dictionary representing the latest state snapshot.
+    """
+    target_user = username or Config.GITHUB_USERNAME
+    auth_token = token or Config.GITHUB_TOKEN
+    headers = get_headers(auth_token)
+
+    try:
+        # 1. Fetch lightweight user profile
+        user_url = f"{API_BASE_URL}/users/{target_user}"
+        res = requests.get(user_url, headers=headers, timeout=10)
+        if auth_token and check_token_expiration(res):
+            headers = get_headers(None)
+            res = requests.get(user_url, headers=headers, timeout=10)
+
+        if res.status_code == 404:
+            raise GitHubUserNotFound(f"User '{target_user}' not found on GitHub.")
+        elif res.status_code != 200:
+            raise GitHubAPIError(f"GitHub API Error [{res.status_code}]: {res.text}")
+
+        user = res.json()
+
+        # 2. Fetch latest public event
+        events_url = f"{API_BASE_URL}/users/{target_user}/events"
+        events_res = requests.get(events_url, headers=headers, params={"per_page": 1}, timeout=10)
+        latest_event_id = None
+        latest_event_time = None
+        latest_event_type = None
+        if events_res.status_code == 200:
+            events = events_res.json()
+            if isinstance(events, list) and len(events) > 0:
+                first_ev = events[0]
+                latest_event_id = first_ev.get("id")
+                latest_event_time = first_ev.get("created_at")
+                latest_event_type = first_ev.get("type")
+
+        # 3. Fetch latest pushed repository
+        repos_url = f"{API_BASE_URL}/users/{target_user}/repos"
+        repos_res = requests.get(repos_url, headers=headers, params={"per_page": 1, "sort": "pushed"}, timeout=10)
+        latest_pushed_repo = None
+        latest_pushed_at = None
+        if repos_res.status_code == 200:
+            repos = repos_res.json()
+            if isinstance(repos, list) and len(repos) > 0:
+                latest_pushed_repo = repos[0].get("name")
+                latest_pushed_at = repos[0].get("pushed_at")
+
+        # 4. Age calculation
+        birthday_age = calculate_age(Config.BIRTHDAY)
+
+        # 5. Local config hash
+        cfg_hash = get_config_hash()
+
+        # 6. Current state snapshot
+        current_state = {
+            "login": user["login"],
+            "name": user.get("name") or user["login"],
+            "avatar_url": user.get("avatar_url", ""),
+            "user_updated_at": user.get("updated_at", ""),
+            "public_repos": user.get("public_repos", 0),
+            "followers": user.get("followers", 0),
+            "location": user.get("location"),
+            "company": user.get("company"),
+            "blog": user.get("blog"),
+            "email": user.get("email"),
+            "bio": user.get("bio"),
+            "latest_event_id": str(latest_event_id) if latest_event_id else None,
+            "latest_event_time": latest_event_time,
+            "latest_event_type": latest_event_type,
+            "latest_pushed_repo": latest_pushed_repo,
+            "latest_pushed_at": latest_pushed_at,
+            "birthday_age": birthday_age,
+            "config_hash": cfg_hash,
+            "last_checked_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+        if not prev_state:
+            return True, ["Initial baseline check (no previous state found)"], current_state
+
+        reasons: list[str] = []
+
+        if current_state["latest_event_id"] and current_state["latest_event_id"] != prev_state.get("latest_event_id"):
+            reasons.append(f"New GitHub activity ({current_state['latest_event_type']} at {current_state['latest_event_time']})")
+
+        if current_state["latest_pushed_at"] and current_state["latest_pushed_at"] != prev_state.get("latest_pushed_at"):
+            reasons.append(f"Repository push detected on '{current_state['latest_pushed_repo']}' at {current_state['latest_pushed_at']}")
+
+        if current_state["public_repos"] != prev_state.get("public_repos"):
+            reasons.append(f"Public repos count changed ({prev_state.get('public_repos')} -> {current_state['public_repos']})")
+
+        if current_state["followers"] != prev_state.get("followers"):
+            reasons.append(f"Followers count changed ({prev_state.get('followers')} -> {current_state['followers']})")
+
+        if current_state["user_updated_at"] != prev_state.get("user_updated_at"):
+            reasons.append(f"GitHub user profile timestamp updated ({current_state['user_updated_at']})")
+
+        if current_state["avatar_url"] != prev_state.get("avatar_url"):
+            reasons.append("Avatar image URL updated")
+
+        if current_state["birthday_age"] != prev_state.get("birthday_age"):
+            reasons.append(f"Uptime / age incremented ({prev_state.get('birthday_age')} -> {current_state['birthday_age']})")
+
+        if current_state["config_hash"] != prev_state.get("config_hash"):
+            reasons.append("Custom configuration / profile info updated in .env")
+
+        for field in ["name", "location", "company", "blog", "email", "bio"]:
+            if current_state.get(field) != prev_state.get(field):
+                reasons.append(f"Profile field '{field}' changed")
+
+        return bool(reasons), reasons, current_state
+
+    except requests.RequestException as e:
+        logger.warning("Network/API error while checking GitHub status: %s", e)
+        return False, [], (prev_state or {})
+    except Exception as e:
+        logger.error("Unexpected error during GitHub status check: %s", e, exc_info=True)
+        return False, [], (prev_state or {})
+

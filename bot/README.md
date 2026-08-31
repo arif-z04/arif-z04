@@ -6,7 +6,8 @@ A modular Python background bot that automatically monitors your GitHub profile 
 
 ## 🛠️ Features
 
-- **Continuous Background Execution**: Runs as a systemd user service starting automatically on Linux system boot.
+- **Event-Driven Background Monitoring**: Continuously checks GitHub in the background and only triggers regeneration and git pushes when updates (new commits, repo changes, follower changes, age/uptime increment, profile edits) are detected compared to previous records.
+- **Continuous Background Execution**: Runs seamlessly as a systemd user service starting automatically on Linux system boot.
 - **Dual-Theme SVG Rendering**: Generates both GitHub Light mode (`light_mode.svg`) and Dark mode (`dark_mode.svg`) vector cards.
 - **Detailed ASCII Generator**: Uses Pillow image sampling, Sobel edge detection (`|`, `\`, `-`, `/`), luminance normalization, and Floyd-Steinberg dithering for high-detail ASCII art.
 - **Automated Git Push**: Stages updated SVGs, creates descriptive commits, and pushes to your remote GitHub repository via SSH.
@@ -21,12 +22,13 @@ arif-z04/
 ├── .env.example            # Environment configuration template
 ├── .env                    # Local environment config (token, username)
 ├── .gitignore              # Git ignore configuration
+├── .bot_state.json         # State snapshot tracking previous GitHub records
 ├── light_mode.svg          # Generated Light theme SVG profile card
 ├── dark_mode.svg           # Generated Dark theme SVG profile card
 └── bot/
     ├── __init__.py         # Package initialization
-    ├── config.py           # Config loader via python-dotenv
-    ├── github_api.py       # GitHub REST API client & uptime calculator
+    ├── config.py           # Config loader via python-dotenv / env fallback
+    ├── github_api.py       # GitHub REST API client & status change detector
     ├── ascii_generator.py  # High-detail image to ASCII art generator
     ├── svg_renderer.py     # Light and Dark SVG vector card renderer
     ├── git_manager.py      # Git diff monitoring, committing & SSH pushing
@@ -43,7 +45,7 @@ Open the `.env` file in the repository root and paste your token:
 ```env
 GITHUB_TOKEN=ghp_your_personal_access_token_here
 GITHUB_USERNAME=arif-z04
-UPDATE_INTERVAL_HOURS=1
+CHECK_INTERVAL_SECONDS=120
 GIT_BRANCH=main
 ```
 
@@ -56,7 +58,7 @@ python3 -m bot.main --once
 ```
 
 #### Run in Foreground Daemon Mode
-Run the bot continuously in the current terminal window:
+Run the bot continuously in the current terminal window with background status checking:
 ```bash
 python3 -m bot.main --daemon
 ```
