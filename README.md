@@ -4,4 +4,4 @@
   <img alt="arif-z04's GitHub profile" src="dark_mode.svg" />
 </picture>
 
-[Bot Documentation](bot/README.md)
+[Bot Documentation](bot/README.md) >_<
