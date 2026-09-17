@@ -23,6 +23,7 @@ arif-z04/
 ├── .env                    # Local environment config (token, username)
 ├── .gitignore              # Git ignore configuration
 ├── .bot_state.json         # State snapshot tracking previous GitHub records
+├── requirements.txt        # Python package dependencies
 ├── light_mode.svg          # Generated Light theme SVG profile card
 ├── dark_mode.svg           # Generated Dark theme SVG profile card
 └── bot/
@@ -40,7 +41,12 @@ arif-z04/
 
 ## 🚀 Quick Setup & Usage
 
-### 1. Add your GitHub API Token (Optional but Recommended)
+### 1. Install Dependencies
+```bash
+pip install -r requirements.txt
+```
+
+### 2. Add your GitHub API Token (Optional but Recommended)
 Open the `.env` file in the repository root and paste your token:
 ```env
 GITHUB_TOKEN=ghp_your_personal_access_token_here
@@ -49,7 +55,7 @@ CHECK_INTERVAL_SECONDS=120
 GIT_BRANCH=main
 ```
 
-### 2. Management Commands
+### 3. Management Commands
 
 #### Single Update Run (Testing)
 Run a single update cycle to verify data fetching and SVG generation:
