@@ -6,6 +6,7 @@ social accounts, top programming languages, commit search metrics, lines of code
 VSCode version, age calculation, and contributions with optional OAuth authorization.
 """
 
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, asdict
 from datetime import datetime, timezone
 import hashlib
@@ -125,20 +126,21 @@ def calculate_age(birth_date_str: str, now: datetime | None = None) -> str:
     return ", ".join(parts)
 
 
-def fetch_vscode_version() -> str:
+def fetch_vscode_version(headers: dict[str, str] | None = None, fallback: str = "1.144.0") -> str:
     """
     Fetches the latest official VSCode version from GitHub/VSCode API releases.
-    Fallback: '1.98.0'
+    Fallback: '1.144.0'
     """
     url = "https://api.github.com/repos/microsoft/vscode/releases/latest"
+    req_headers = headers if headers else {"User-Agent": Config.USER_AGENT}
     try:
-        res = requests.get(url, headers={"User-Agent": Config.USER_AGENT}, timeout=5)
+        res = requests.get(url, headers=req_headers, timeout=5)
         if res.status_code == 200:
-            tag = res.json().get("tag_name", "1.98.0")
+            tag = res.json().get("tag_name", fallback)
             return tag.lstrip("v").strip()
     except Exception as e:
         logger.warning("Failed to fetch VSCode version from website API: %s", e)
-    return "1.98.0"
+    return fallback
 
 
 def fetch_social_accounts(username: str, headers: dict[str, str]) -> dict[str, str]:
@@ -163,19 +165,28 @@ def fetch_social_accounts(username: str, headers: dict[str, str]) -> dict[str, s
 
 def check_token_expiration(res: requests.Response) -> bool:
     """Checks if response indicates expired or invalid token."""
-    if res.status_code in (401, 403):
+    if res.status_code == 401:
+        logger.error("=" * 60)
+        logger.error("⚠️ WARNING: GITHUB TOKEN EXPIRED OR INVALID (HTTP 401)")
+        logger.error("The configured GITHUB_TOKEN in '.env' failed authentication.")
+        logger.error("Please generate a new token and update your '.env' file!")
+        logger.error("=" * 60)
+        return True
+    if res.status_code == 403:
         res_text = res.text.lower()
-        if "bad credentials" in res_text or "token" in res_text or res.status_code == 401:
+        if "bad credentials" in res_text or "token expired" in res_text:
             logger.error("=" * 60)
-            logger.error("⚠️ WARNING: GITHUB TOKEN EXPIRED OR INVALID (HTTP %d)", res.status_code)
+            logger.error("⚠️ WARNING: GITHUB TOKEN EXPIRED OR INVALID (HTTP 403)")
             logger.error("The configured GITHUB_TOKEN in '.env' failed authentication.")
             logger.error("Please generate a new token and update your '.env' file!")
             logger.error("=" * 60)
             return True
+        elif "rate limit" in res_text:
+            logger.warning("GitHub API rate limit reached (HTTP 403): %s", res.json().get("message", "rate limit exceeded"))
     return False
 
 
-def fetch_commit_count(username: str, headers: dict[str, str]) -> int:
+def fetch_commit_count(username: str, headers: dict[str, str], fallback: int = 0) -> int:
     """Fetches total author commits count using GitHub Commit Search API."""
     search_url = f"{API_BASE_URL}/search/commits"
     params = {"q": f"author:{username}", "per_page": 1}
@@ -183,30 +194,40 @@ def fetch_commit_count(username: str, headers: dict[str, str]) -> int:
         res = requests.get(search_url, headers=headers, params=params, timeout=10)
         if res.status_code == 200:
             data = res.json()
-            return data.get("total_count", 0)
+            return data.get("total_count", fallback)
         else:
             check_token_expiration(res)
-            return 0
+            logger.warning("Commit search returned status %d. Using fallback commits: %d", res.status_code, fallback)
+            return fallback
     except Exception as e:
-        logger.warning("Failed to fetch commit count: %s", e)
-        return 0
+        logger.warning("Failed to fetch commit count: %s. Using fallback: %d", e, fallback)
+        return fallback
 
 
-def fetch_lines_of_code(username: str, repos: list[dict], headers: dict[str, str]) -> tuple[int, int, int]:
+def fetch_lines_of_code(
+    username: str,
+    repos: list[dict],
+    headers: dict[str, str],
+    cached_loc: dict[str, list[int]] | None = None
+) -> tuple[int, int, int, dict[str, list[int]]]:
     """
     Calculates total additions (+), deletions (-), and net lines of code (LOC)
-    by analyzing contributor statistics across user's public repositories.
+    by analyzing contributor statistics across user's public repositories concurrently.
+    Uses cached metrics per repository to handle asynchronous GitHub statistics calculations (HTTP 202).
     """
-    logger.info("Computing Lines of Code metrics (additions & deletions) across repositories...")
-    total_additions = 0
-    total_deletions = 0
+    logger.info("Computing Lines of Code metrics (additions & deletions) across %d repositories...", len(repos))
+    loc_cache: dict[str, list[int]] = dict(cached_loc or {})
 
-    for repo in repos:
-        name = repo.get("name")
+    def query_single_repo(repo: dict) -> tuple[str, int, int]:
+        name = repo.get("name", "")
         owner = repo.get("owner", {}).get("login", username)
 
+        # Skip forks
+        if repo.get("fork", False):
+            return name, 0, 0
+
         # Retry loop for async contributor stats (HTTP 202 Accepted)
-        for attempt in range(3):
+        for attempt in range(4):
             try:
                 stats_res = requests.get(
                     f"{API_BASE_URL}/repos/{owner}/{name}/stats/contributors",
@@ -215,33 +236,66 @@ def fetch_lines_of_code(username: str, repos: list[dict], headers: dict[str, str
                 )
                 if stats_res.status_code == 200:
                     contributors = stats_res.json()
+                    additions = 0
+                    deletions = 0
                     if isinstance(contributors, list):
                         for c in contributors:
                             if c.get("author", {}).get("login") == username:
                                 for week in c.get("weeks", []):
-                                    total_additions += week.get("a", 0)
-                                    total_deletions += week.get("d", 0)
-                    break
+                                    additions += week.get("a", 0)
+                                    deletions += week.get("d", 0)
+                    return name, additions, deletions
                 elif stats_res.status_code == 202:
-                    time.sleep(0.5)
+                    time.sleep(1.0)
+                elif stats_res.status_code == 204:
+                    return name, 0, 0
                 else:
                     break
-            except Exception:
+            except Exception as req_err:
+                logger.debug("Request error for repo %s: %s", name, req_err)
                 break
+
+        # If repo could not be calculated (202 or timeout) but is in cache, reuse cached stats
+        if name in loc_cache:
+            prev_a, prev_d = loc_cache[name]
+            logger.info("Using cached LOC for '%s': +%d, -%d", name, prev_a, prev_d)
+            return name, prev_a, prev_d
+
+        return name, 0, 0
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        results = list(executor.map(query_single_repo, repos))
+
+    total_additions = 0
+    total_deletions = 0
+    for name, a, d in results:
+        loc_cache[name] = [a, d]
+        total_additions += a
+        total_deletions += d
 
     net_loc = total_additions - total_deletions
     logger.info("Lines of Code computed: +%d additions, -%d deletions, net: %d LOC",
                 total_additions, total_deletions, net_loc)
-    return total_additions, total_deletions, net_loc
+    return total_additions, total_deletions, net_loc, loc_cache
 
 
-def fetch_stats(username: str | None = None, token: str | None = None) -> GitHubStats:
+def fetch_stats(
+    username: str | None = None,
+    token: str | None = None,
+    prev_state: dict | None = None
+) -> tuple[GitHubStats, dict[str, list[int]]]:
     """
     Fetches comprehensive stats for the specified user from GitHub REST API and custom configs.
     """
     target_user = username or Config.GITHUB_USERNAME
     auth_token = token or Config.GITHUB_TOKEN
     headers = get_headers(auth_token)
+
+    # Use previous state for robust fallbacks if provided
+    state_ctx = prev_state or load_bot_state() or {}
+    cached_loc = state_ctx.get("repo_loc_cache", {})
+    fallback_commits = state_ctx.get("commits", 0)
+    fallback_vscode = state_ctx.get("vscode_version", "1.144.0")
 
     logger.info("Fetching profile stats for user '%s'...", target_user)
 
@@ -293,13 +347,15 @@ def fetch_stats(username: str | None = None, token: str | None = None) -> GitHub
     facebook = facebook_url.replace("https://www.facebook.com/", "facebook.com/").rstrip("/") if facebook_url else None
 
     # 4. Fetch Commit Count
-    commits = fetch_commit_count(target_user, headers)
+    commits = fetch_commit_count(target_user, headers, fallback=fallback_commits)
 
     # 5. Fetch Lines of Code (additions & deletions)
-    additions, deletions, net_loc = fetch_lines_of_code(target_user, repos, headers)
+    additions, deletions, net_loc, loc_cache = fetch_lines_of_code(
+        target_user, repos, headers, cached_loc=cached_loc
+    )
 
     # 6. Fetch VSCode Version
-    vscode_version = fetch_vscode_version()
+    vscode_version = fetch_vscode_version(headers=headers, fallback=fallback_vscode)
 
     # 7. Calculate Age from Birthday
     birthday_age = calculate_age(Config.BIRTHDAY)
@@ -338,7 +394,7 @@ def fetch_stats(username: str | None = None, token: str | None = None) -> GitHub
     )
 
     logger.info("Successfully retrieved full profile stats for '%s'", stats.login)
-    return stats
+    return stats, loc_cache
 
 
 def get_config_hash() -> str:
@@ -413,10 +469,11 @@ def check_github_status_updated(
 
         # 2. Fetch latest public event
         events_url = f"{API_BASE_URL}/users/{target_user}/events"
-        events_res = requests.get(events_url, headers=headers, params={"per_page": 1}, timeout=10)
+        events_res = requests.get(events_url, headers=headers, params={"per_page": 5}, timeout=10)
         latest_event_id = None
         latest_event_time = None
         latest_event_type = None
+        latest_event_is_bot = False
         if events_res.status_code == 200:
             events = events_res.json()
             if isinstance(events, list) and len(events) > 0:
@@ -425,9 +482,17 @@ def check_github_status_updated(
                 latest_event_time = first_ev.get("created_at")
                 latest_event_type = first_ev.get("type")
 
+                # Check if this latest event is the bot's own push to this repo
+                if latest_event_type == "PushEvent":
+                    repo_name = first_ev.get("repo", {}).get("name", "")
+                    if repo_name.endswith(f"/{target_user}") or repo_name.endswith(f"/{Config.REPO_DIR.name}"):
+                        commits = first_ev.get("payload", {}).get("commits", [])
+                        if commits and any("[auto]" in c.get("message", "") or "update profile stats SVGs" in c.get("message", "") for c in commits):
+                            latest_event_is_bot = True
+
         # 3. Fetch latest pushed repository
         repos_url = f"{API_BASE_URL}/users/{target_user}/repos"
-        repos_res = requests.get(repos_url, headers=headers, params={"per_page": 1, "sort": "pushed"}, timeout=10)
+        repos_res = requests.get(repos_url, headers=headers, params={"per_page": 5, "sort": "pushed"}, timeout=10)
         latest_pushed_repo = None
         latest_pushed_at = None
         if repos_res.status_code == 200:
@@ -465,16 +530,26 @@ def check_github_status_updated(
             "last_checked_at": datetime.now(timezone.utc).isoformat(),
         }
 
+        if prev_state and "repo_loc_cache" in prev_state:
+            current_state["repo_loc_cache"] = prev_state["repo_loc_cache"]
+        if prev_state and "commits" in prev_state:
+            current_state["commits"] = prev_state["commits"]
+        if prev_state and "vscode_version" in prev_state:
+            current_state["vscode_version"] = prev_state["vscode_version"]
+
         if not prev_state:
             return True, ["Initial baseline check (no previous state found)"], current_state
 
         reasons: list[str] = []
 
         if current_state["latest_event_id"] and current_state["latest_event_id"] != prev_state.get("latest_event_id"):
-            reasons.append(f"New GitHub activity ({current_state['latest_event_type']} at {current_state['latest_event_time']})")
+            if not latest_event_is_bot:
+                reasons.append(f"New GitHub activity ({current_state['latest_event_type']} at {current_state['latest_event_time']})")
 
         if current_state["latest_pushed_at"] and current_state["latest_pushed_at"] != prev_state.get("latest_pushed_at"):
-            reasons.append(f"Repository push detected on '{current_state['latest_pushed_repo']}' at {current_state['latest_pushed_at']}")
+            is_self_repo = (current_state["latest_pushed_repo"] in (target_user, Config.REPO_DIR.name))
+            if not (is_self_repo and latest_event_is_bot):
+                reasons.append(f"Repository push detected on '{current_state['latest_pushed_repo']}' at {current_state['latest_pushed_at']}")
 
         if current_state["public_repos"] != prev_state.get("public_repos"):
             reasons.append(f"Public repos count changed ({prev_state.get('public_repos')} -> {current_state['public_repos']})")

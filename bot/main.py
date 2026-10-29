@@ -7,6 +7,7 @@ and Linux Systemd boot service management commands.
 """
 
 import argparse
+from datetime import datetime, timezone
 import logging
 import sys
 import time
@@ -57,7 +58,8 @@ def run_update_cycle(state: dict | None = None) -> bool:
 
     try:
         # 1. Fetch GitHub Statistics
-        stats = fetch_stats()
+        prev_state = state or load_bot_state()
+        stats, loc_cache = fetch_stats(prev_state=prev_state)
 
         # 2. Fetch Avatar Image
         avatar_img = fetch_avatar_image(stats.avatar_url)
@@ -84,15 +86,26 @@ def run_update_cycle(state: dict | None = None) -> bool:
         logger.info("Saved updated SVG -> %s", Config.DARK_SVG_PATH)
 
         # 6. Commit and Push via Git
-        commit_and_push_svgs()
+        pushed = commit_and_push_svgs()
 
         # 7. Persist updated state snapshot
         if state is not None:
-            save_bot_state(state)
+            current_state = dict(state)
         else:
             # Generate snapshot from current check
-            _, _, current_state = check_github_status_updated(prev_state=None)
-            save_bot_state(current_state)
+            _, _, current_state = check_github_status_updated(prev_state=prev_state)
+
+        current_state["repo_loc_cache"] = loc_cache
+        current_state["commits"] = stats.commits
+        current_state["vscode_version"] = stats.vscode_version
+        current_state["birthday_age"] = stats.birthday_age
+        current_state["last_checked_at"] = datetime.now(timezone.utc).isoformat()
+
+        if pushed:
+            current_state["latest_pushed_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            current_state["latest_pushed_repo"] = Config.REPO_DIR.name
+
+        save_bot_state(current_state)
 
         logger.info("Update cycle completed successfully!")
         return True
@@ -135,8 +148,7 @@ def run_daemon_loop() -> None:
 
                     success = run_update_cycle(state=current_state)
                     if success:
-                        prev_state = current_state
-                        save_bot_state(current_state)
+                        prev_state = load_bot_state() or current_state
                 else:
                     logger.info("Status check: No changes detected. Standing by...")
 

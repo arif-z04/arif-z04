@@ -96,6 +96,12 @@ def commit_and_push_svgs() -> bool:
     logger.info("Pushing committed SVGs to origin/%s...", branch)
     push_res = run_git_cmd(["push", "origin", branch], cwd=repo_dir)
 
+    if push_res.returncode != 0 and ("non-fast-forward" in push_res.stderr.lower() or "fetch first" in push_res.stderr.lower()):
+        logger.info("Push rejected due to non-fast-forward. Pulling remote changes with rebase...")
+        pull_res = run_git_cmd(["pull", "--rebase", "origin", branch], cwd=repo_dir)
+        if pull_res.returncode == 0:
+            push_res = run_git_cmd(["push", "origin", branch], cwd=repo_dir)
+
     if push_res.returncode == 0:
         logger.info("Successfully pushed SVG updates to remote origin/%s!", branch)
         return True

@@ -23,8 +23,17 @@ SERVICE_FILE_PATH = USER_SYSTEMD_DIR / SERVICE_NAME
 
 def get_service_unit_content() -> str:
     """Generates Systemd unit file content with current paths."""
-    python_bin = sys.executable
     repo_dir = Config.REPO_DIR
+    venv_python = repo_dir / ".venv" / "bin" / "python3"
+    if not venv_python.exists():
+        venv_python = repo_dir / ".venv" / "bin" / "python"
+    
+    if venv_python.exists():
+        python_bin = str(venv_python)
+        env_path = f"{repo_dir}/.venv/bin:/usr/local/bin:/usr/bin:/bin"
+    else:
+        python_bin = sys.executable
+        env_path = "/usr/local/bin:/usr/bin:/bin"
 
     return f"""[Unit]
 Description=GitHub Profile SVG Generator Bot
@@ -39,6 +48,7 @@ ExecStart={python_bin} -m bot.main --daemon
 Restart=always
 RestartSec=60
 Environment=PYTHONUNBUFFERED=1
+Environment="PATH={env_path}"
 
 [Install]
 WantedBy=default.target
